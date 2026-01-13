@@ -1,0 +1,4 @@
+node_modules/
+.DS_Store
+# Ignore the configuration file containing secrets
+js/config.js
