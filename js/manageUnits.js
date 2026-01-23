@@ -1,9 +1,5 @@
 // 1. Initialize Supabase
-// We access the global config object defined in js/config.js
 const { URL: ProjectURL, ANON_KEY } = window.SUPABASE_CONFIG;
-
-// Create the client using the config variables
-// Note: We use a distinct variable name 'supabaseClient' to avoid conflicts
 const supabaseClient = window.supabase.createClient(ProjectURL, ANON_KEY);
 
 const MONTHS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
@@ -13,14 +9,20 @@ const unitSelect = document.getElementById('unitSelect');
 const yearSelect = document.getElementById('yearSelect');
 const loadingIndicator = document.getElementById('loading');
 
+// Menu Elements
+const adminMenuContainer = document.getElementById('adminMenuContainer');
+const menuButton = document.getElementById('menuButton');
+const menuDropdown = document.getElementById('menuDropdown');
+const btnUpload = document.getElementById('btnUpload');
+const btnPrint = document.getElementById('btnPrint');
+
 // 2. Initialize Application
 async function init() {
     loadingIndicator.style.display = 'block';
 
     // A. Populate Year Dropdown Dynamically
-    // This ensures that as soon as it is 2026, the option appears automatically.
     populateYearDropdown();
-// it seems this part is not working as expected, How can I test it using the browser console?
+
     // B. Get units alphabetically
     const { data: units, error } = await supabaseClient.from('units').select('*').order('id');
     
@@ -35,7 +37,6 @@ async function init() {
         const option = document.createElement('option');
         option.value = unit.id;
         option.textContent = unit.name;
-        console.log("Adding unit to dropdown:", unit.name);
         unitSelect.appendChild(option);
     });
     
@@ -72,6 +73,26 @@ async function loadUnitData(unitId) {
     
     // Get the year currently selected by the user
     const selectedYear = parseInt(yearSelect.value);
+    const currentYear = new Date().getFullYear();
+
+// --- UPDATED MENU LOGIC ---
+    
+    // 1. Always show the Hamburger Menu Container (so Print is always available)
+    adminMenuContainer.classList.remove('hidden');
+
+    // 2. Conditionally show/hide ONLY the "Upload" button
+    if (selectedYear === currentYear) {
+        // Current Year: Show Upload Option
+        btnUpload.classList.remove('hidden');
+    } else {
+        // Past Years: Hide Upload Option (Keep Print only)
+        btnUpload.classList.add('hidden');
+    }
+
+    // Close the dropdown if it happens to be open when switching years
+    menuDropdown.classList.add('hidden');
+
+// --- END MENU LOGIC ---
 
     const { data: reports, error } = await supabaseClient
         .from('monthly_reports')
@@ -94,56 +115,46 @@ async function loadUnitData(unitId) {
 
 // 5. Render Chart
 function renderChart(reports, selectedYear) {
-    // Determine the system's actual current year just for coloring the "current year" line green
     const systemYear = new Date().getFullYear();
     const yearsInDb = [...new Set(reports.map(r => r.year))].sort();
     
     const dataByYear = {};
     const metaData = { IS: Array(12).fill(null), RV: Array(12).fill(null), Goal: Array(12).fill(null) };
     
-    // Initialize arrays for line years
     yearsInDb.forEach(y => dataByYear[y] = Array(12).fill(null));
 
     reports.forEach(r => {
-        // 1. Calculate Total
         const total = r.legacy_total > 0 ? r.legacy_total : (r.adults + r.youth);
         
         if (dataByYear[r.year]) {
             dataByYear[r.year][r.month] = total > 0 ? total : null;
         }
         
-        // 2. Capture Metadata STRICTLY for the selected year
         if (r.year === selectedYear) {
-            // We use the raw value. If it's null in DB, it stays null in the chart (gap).
-            // If it is 0, it plots as 0.
             metaData.IS[r.month] = r.family_search_sign_ins;
             metaData.RV[r.month] = r.valid_recommendations;
             metaData.Goal[r.month] = r.monthly_goal;
         }
     });
 
-    // 3. Build Traces
     const traces = [];
     
-    // Year Lines
     yearsInDb.forEach(year => {
         traces.push({
             x: MONTHS,
             y: dataByYear[year],
             name: year.toString(),
             mode: 'lines+markers',
-            // Green if it matches the selected year, otherwise gray
             line: { color: year === selectedYear ? '#4ad27f' : '#bebebe' } 
         });
     });
 
-    // Metadata Lines (IS, RV, Goal) - These will be empty (nulls) if no data exists for selectedYear
     traces.push({ x: MONTHS, y: metaData.IS, name: 'IS', mode: 'lines+markers+text', line: { color: 'orange' } });
     traces.push({ x: MONTHS, y: metaData.RV, name: 'RV', mode: 'lines+markers', line: { color: '#559aef' } });
     traces.push({ x: MONTHS, y: metaData.Goal, name: 'Meta', mode: 'lines+markers', line: { dash: 'dot', color: 'red' } });
 
     const layout = {
-        title: `Enviadores de nombres (${selectedYear})`, // Updated title to reflect selection
+        title: `Enviadores de nombres (${selectedYear})`, 
         xaxis: { title: "Meses" },
         yaxis: { title: "Cantidad" },
         margin: { t: 50, b: 50, l: 40, r: 10 },
@@ -154,19 +165,18 @@ function renderChart(reports, selectedYear) {
     Plotly.newPlot("myPlot", traces, layout, config);
 }
 
-// 6. Render Table (Tailwind Styled)
+// 6. Render Table
 function renderTable(reports, selectedYear) {
     const container = document.getElementById("dynamictable");
     const yearReports = reports.filter(r => r.year === selectedYear);
     const map = {};
     yearReports.forEach(r => map[r.month] = r);
 
-    // Tailwind classes for styling
     const tableClasses = "min-w-full divide-y divide-gray-200";
     const headClasses = "bg-latterday text-white";
     const thClasses = "px-4 py-3 text-center text-xs font-medium uppercase tracking-wider";
     const tdClasses = "px-4 py-3 whitespace-nowrap text-sm text-center text-gray-600 border-b border-gray-100";
-    const totalColClasses = "font-bold text-latterday bg-latterdayLight"; // Highlight total column
+    const totalColClasses = "font-bold text-latterday bg-latterdayLight"; 
 
     let html = `<table class="${tableClasses}">
         <thead class="${headClasses}">
@@ -186,7 +196,6 @@ function renderTable(reports, selectedYear) {
         const total = r.legacy_total > 0 ? r.legacy_total : (r.adults + r.youth);
         const displayTotal = total === 0 ? '-' : total;
         
-        // Add zebra striping for rows
         const rowClass = index % 2 === 0 ? "bg-white hover:bg-gray-50" : "bg-gray-50 hover:bg-gray-100";
 
         html += `<tr class="${rowClass}">
@@ -203,12 +212,42 @@ function renderTable(reports, selectedYear) {
     container.innerHTML = html;
 }
 
+// --- MENU HANDLERS ---
+
+// Toggle dropdown
+menuButton.addEventListener('click', (e) => {
+    e.stopPropagation(); // Prevent document click from closing it immediately
+    menuDropdown.classList.toggle('hidden');
+});
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+    if (!menuButton.contains(e.target) && !menuDropdown.contains(e.target)) {
+        menuDropdown.classList.add('hidden');
+    }
+});
+
+// Action: Print
+btnPrint.addEventListener('click', (e) => {
+    e.preventDefault();
+    menuDropdown.classList.add('hidden');
+    window.print();
+});
+
+// Action: Upload (Placeholder)
+btnUpload.addEventListener('click', (e) => {
+    e.preventDefault();
+    menuDropdown.classList.add('hidden');
+    alert("Función para subir datos: Próximamente");
+    // Logic to open upload modal goes here
+});
+
+
 // Event Listeners
 document.addEventListener('DOMContentLoaded', init);
 
 unitSelect.addEventListener('change', (e) => loadUnitData(e.target.value));
 
 yearSelect.addEventListener('change', () => {
-    // Reload only the table filtering
     loadUnitData(unitSelect.value);
 });
