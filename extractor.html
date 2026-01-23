@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"> <!-- UTF-8 encoding -->
+  <title>MHTML Data Extractor</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; background-color: #f4f4f9; }
+    .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; }
+    .result-section { margin-top: 20px; border-top: 2px solid #eee; padding-top: 20px; }
+    .value-list { background: #f9f9f9; padding: 15px; border-left: 5px solid #0056b3; white-space: pre-wrap; }
+    input[type="file"] { margin-bottom: 20px; }
+    h3 { color: #0056b3; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>MHTML Data Extractor</h2>
+  <p>Upload your .mhtml file to extract values from the first TR row and chart labels.</p>
+  
+  <input type="file" id="mhtmlUpload" accept=".mhtml">
+  
+  <div id="output" class="result-section" style="display:none;">
+    <h3>Extracted Results</h3>
+    <div id="resultsDisplay" class="value-list"></div>
+  </div>
+</div>
+
+<script>
+document.getElementById('mhtmlUpload').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(event) {
+    processMHTML(event.target.result);
+  };
+  reader.readAsText(file, 'UTF-8'); // ensure UTF-8 encoding
+});
+
+function decodeQuotedPrintable(input) {
+  return input
+    .replace(/=\r?\n/g, '') 
+    .replace(/=[0-9A-F]{2}/g, m => String.fromCharCode(parseInt(m.slice(1), 16)));
+}
+
+function processMHTML(mhtmlText) {
+  const decodedHtml = decodeQuotedPrintable(mhtmlText);
+  const doc = new DOMParser().parseFromString(decodedHtml, 'text/html');
+
+  let outputLines = [];
+
+  // --- Extract values from first TR row ---
+  const tbody = doc.querySelector('tbody.sc-187e9l6-0.eXRlML');
+  if (tbody) {
+    const firstTr = tbody.querySelector('tr.sc-zkgtp5-0.iooGpB');
+    if (firstTr) {
+      const tds = firstTr.querySelectorAll('td.sc-8selpg-0.jIHzxj[spacing="normal"]');
+      tds.forEach((td, i) => {
+        let rawText = td.textContent.trim();
+        if (rawText.includes("/")) {
+          rawText = rawText.split("/")[0].trim();
+        }
+        if (i === 0) {
+          // First value is a string
+          outputLines.push(decodeURIComponent(escape(rawText)));
+        } else {
+          // Convert to number
+          const numVal = Number(rawText);
+          outputLines.push(numVal);
+        }
+      });
+    } else {
+      outputLines.push("No matching TR found.");
+    }
+  } else {
+    outputLines.push("No matching TBODY found.");
+  }
+
+  // --- Extract last value from last <tspan> of last <g> with color-0 ---
+  const gTagsColor0 = doc.querySelectorAll('g.highcharts-label.highcharts-data-label.highcharts-data-label-color-0');
+  if (gTagsColor0.length > 0) {
+    const lastG = gTagsColor0[gTagsColor0.length - 1];
+    const tspans = lastG.querySelectorAll('tspan');
+    if (tspans.length > 0) {
+      const lastTspan = tspans[tspans.length - 1];
+      const val = lastTspan.textContent.trim();
+      if (val) outputLines.push(val);
+    }
+  }
+
+ // Count all <tspan x="5" y="15"> tags 
+  const tspans = doc.querySelectorAll( 'tspan[x="5"][y="15"].highcharts-text-outline[fill="#FFFFFF"][stroke="#FFFFFF"][stroke-width="2px"][stroke-linejoin="round"]' ); 
+ let count = tspans.length; 
+ // Apply correction: minus 12, then minus 1 
+ let result = count - 12 - 1;
+ if (result) outputLines.push(result);
+
+   // --- Extract last value from last <tspan> of last <g> with color-0 ---
+  const gTagsYear = doc.querySelectorAll('g.highcharts-legend-item.highcharts-spline-series.highcharts-color-undefined.highcharts-series-1');
+  if (gTagsYear.length > 0) {
+    const lastG = gTagsYear[gTagsYear.length - 1];
+    const tspans = lastG.querySelectorAll('tspan');
+    if (tspans.length > 0) {
+      const lastTspan = tspans[tspans.length - 1];
+      let val = lastTspan.textContent.trim();
+        if (val.includes("YTD")) {
+          val = val.split("YTD")[1].trim();
+        }
+      if (val) outputLines.push(val);
+    }
+  }
+
+  document.getElementById('resultsDisplay').textContent = outputLines.join("\n");
+  document.getElementById('output').style.display = 'block';
+}
+</script>
+
+</body>
+</html>
