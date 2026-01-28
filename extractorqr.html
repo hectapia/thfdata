@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"> <!-- UTF-8 encoding -->
+  <title>MHTML Data Extractor</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; background-color: #f4f4f9; }
+    .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; }
+    .result-section { margin-top: 20px; border-top: 2px solid #eee; padding-top: 20px; }
+    .value-list { background: #f9f9f9; padding: 15px; border-left: 5px solid #0056b3; white-space: pre-wrap; }
+    input[type="file"] { margin-bottom: 20px; }
+    h3 { color: #0056b3; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>MHTML Data Extractor</h2>
+  <p>Upload your .mhtml file to extract values from the first TR row and chart labels.</p>
+  
+  <input type="file" id="mhtmlUpload" accept=".mhtml">
+  
+  <div id="output" class="result-section" style="display:none;">
+    <h3>Extracted Results</h3>
+    <div id="resultsDisplay" class="value-list"></div>
+  </div>
+</div>
+
+<script>
+document.getElementById('mhtmlUpload').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(event) {
+    processMHTML(event.target.result);
+  };
+  reader.readAsText(file, 'UTF-8'); // ensure UTF-8 encoding
+});
+
+function decodeQuotedPrintable(input) {
+  return input
+    .replace(/=\r?\n/g, '') 
+    .replace(/=[0-9A-F]{2}/g, m => String.fromCharCode(parseInt(m.slice(1), 16)));
+}
+
+function processMHTML(mhtmlText) {
+  const decodedHtml = decodeQuotedPrintable(mhtmlText);
+  const doc = new DOMParser().parseFromString(decodedHtml, 'text/html');
+
+  let ageRecom = [];
+
+  // ✅ Loop through ALL tbody blocks with the target class
+  const tbodies = doc.querySelectorAll('tbody.sc-187e9l6-0.eXRlML');
+  if (tbodies.length > 0) {
+    tbodies.forEach((tbody, blockIndex) => {
+      const rows = tbody.querySelectorAll('tr.sc-zkgtp5-0.iooGpB');
+      rows.forEach(row => {
+        const idCell = row.querySelector('td.sc-8selpg-0.jIHzxj.sc-aa1c5f6f-0.fskBXn');
+        if (idCell) {
+          // Normalize: extract all digits and join them
+          const rawText = idCell.innerText || idCell.textContent;
+          const digits = rawText.match(/\d+/g);
+          const idValue = digits ? parseInt(digits.join(""), 10) : NaN;
+
+          console.log("Extracted ID Value:", idValue);
+
+          if (idValue === 2 || idValue === 20) {
+            // Collect values from cRTgrU and bVyBji cells
+            const valueCells = row.querySelectorAll(
+              'td.sc-8selpg-0.jIHzxj.sc-aa1c5f6f-0.cRTgrU, td.sc-8selpg-0.jIHzxj.sc-aa1c5f6f-0.bVyBji'
+            );
+            let values = [];
+            valueCells.forEach(vc => values.push(Number(vc.textContent.trim())));
+            ageRecom.push(values);
+          }
+        }
+      });
+    });
+
+    if (ageRecom.length === 0) {
+      ageRecom.push("No rows with id 2 or 20 found in any block.");
+    }
+  } else {
+    ageRecom.push("No matching TBODY found.");
+  }
+  
+      console.log(ageRecom);
+
+    // Define the specific order of IDs as per your requirements
+    const ids = [2, 3, 4, 5, 6, 8, 9, 10, 7, 11];
+
+    let recomByUnit = [];
+    let grandTotal = 0;
+
+    // Access the x and y arrays directly
+    const x = ageRecom[0];
+    const y = ageRecom[1];
+
+    // Loop through the arrays to calculate sums for each unit
+    for (let i = 0; i < ids.length; i++) {
+      let unitSum = x[i] + y[i];
+      recomByUnit.push([ids[i], unitSum]);
+      
+      // Add this unit's sum to the grand total
+      grandTotal += unitSum;
+    }
+
+    // Add the final entry [1, grandTotal] to the end of the array
+    recomByUnit.push([1, grandTotal]);
+
+    // Sort the array in descending order based on the first value (index 0)
+    recomByUnit.sort((a, b) => a[0] - b[0]);
+
+    // Output the result
+    console.log(recomByUnit);
+
+  document.getElementById('resultsDisplay').textContent = recomByUnit.join("\n");
+  document.getElementById('output').style.display = 'block';
+}
+</script>
+
+</body>
+</html>

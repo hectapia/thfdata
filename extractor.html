@@ -84,7 +84,7 @@ function processMHTML(mhtmlText) {
     const tspans = lastG.querySelectorAll('tspan');
     if (tspans.length > 0) {
       const lastTspan = tspans[tspans.length - 1];
-      const val = lastTspan.textContent.trim();
+      const val = Number(lastTspan.textContent.trim());
       if (val) outputLines.push(val);
     }
   }
@@ -105,12 +105,12 @@ function processMHTML(mhtmlText) {
       const lastTspan = tspans[tspans.length - 1];
       let val = lastTspan.textContent.trim();
         if (val.includes("YTD")) {
-          val = val.split("YTD")[1].trim();
+          val = Number(val.split("YTD")[1].trim());
         }
       if (val) outputLines.push(val);
     }
   }
-
+  console.log(outputLines);
   document.getElementById('resultsDisplay').textContent = outputLines.join("\n");
   document.getElementById('output').style.display = 'block';
 }
