@@ -16,6 +16,9 @@ const menuDropdown = document.getElementById('menuDropdown');
 const btnUpload = document.getElementById('btnUpload');
 const btnPrint = document.getElementById('btnPrint');
 
+// Data Store for Unit IDs and Names
+let unitsIdNames = [];
+
 // 2. Initialize Application
 async function init() {
     loadingIndicator.style.display = 'block';
@@ -37,9 +40,15 @@ async function init() {
         const option = document.createElement('option');
         option.value = unit.id;
         option.textContent = unit.name;
+        
+        // Store ID and Name
+        unitsIdNames.push({ id: unit.id, name: unit.name });
+
         unitSelect.appendChild(option);
     });
     
+    console.log(unitsIdNames);
+
     loadingIndicator.style.display = 'none';
 
     // D. Load data for the first unit by default
